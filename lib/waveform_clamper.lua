@@ -24,7 +24,15 @@ function WaveformClamper.isReaderDocumentView()
         return false
     end
 
-    local top_widget = stack[#stack]
+    local top_widget = nil
+    for i = #stack, 1, -1 do
+        local entry = stack[i]
+        local w = (type(entry) == "table" and entry.widget) or entry
+        if w and not w.invisible and not w.toast then
+            top_widget = w
+            break
+        end
+    end
     if not top_widget then
         return false
     end

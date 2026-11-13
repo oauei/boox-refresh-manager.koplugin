@@ -1,5 +1,5 @@
 -- main.lua
--- Boox Refresh Manager: Refresh coalescing, waveform clamping, and SurfaceFlinger byPass
+-- Boox Refresh Manager: Refresh coalescing, waveform clamping, and SurfaceFlinger app-scope EPD override
 -- Eliminates full-screen white flashes when navigating menus and Bookshelf in Regal mode on Onyx Boox devices.
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -26,11 +26,13 @@ local BooxRefreshManager = WidgetContainer:extend{
 
 local orig_setDirty = nil
 local orig_ui_imp = nil
+local orig_partial_imp = nil
+local orig_full_imp = nil
 
 local JNI_OK = 0
 local JNI_VERSION_1_6 = 0x00010006
 
-local OPTIMAL_REGAL_APP_CONFIG_JSON = '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":false,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":50,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"regal_plus","refreshModeIndex":"refresh_mode_1","supportRegal":false,"turbo":0,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":true}'
+local OPTIMAL_REGAL_APP_CONFIG_JSON = '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":false,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":10,"enable":true,"gcInterval":20,"refreshModeAlias":"regal_plus","refreshModeIndex":"refresh_mode_1","supportRegal":false,"turbo":0,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":false}'
 
 local function getAndroidModule()
     if package.loaded["android"] then
@@ -109,33 +111,116 @@ local function withJNIEnv(p_android, fn)
     return ok, res
 end
 
-function BooxRefreshManager:applyHardwareDisplayScheme(p_android)
-    local applied = false
-    withJNIEnv(p_android, function(env, ffi)
+local function callStaticVUHMethod(env, vuh_cls, name, sig, ...)
+    local mid = env[0].GetStaticMethodID(env, vuh_cls, name, sig)
+    if mid ~= nil then
+        env[0].CallStaticVoidMethod(env, vuh_cls, mid, ...)
+    end
+    clearJNIException(env)
+end
+
+-- Resets byPass(0), disables SurfaceFlinger's debouncer/Regal/dither, and applies app-scope EPD mode
+-- so UI/Menu/Bookshelf partial buffer swaps update immediately without triggering a waveform 16 white flash.
+local function disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls, epd_mode)
+    local target_epd_mode = epd_mode or WaveformClamper.ui_epd_mode or 5
+
+    callStaticVUHMethod(env, vuh_cls, "byPass", "(I)V", ffi_mod.cast("jint", 0))
+    callStaticVUHMethod(
+        env,
+        vuh_cls,
+        "debouncer",
+        "(ZIIII)V",
+        ffi_mod.cast("jboolean", 0),
+        ffi_mod.cast("jint", 0),
+        ffi_mod.cast("jint", 0),
+        ffi_mod.cast("jint", 0),
+        ffi_mod.cast("jint", 0)
+    )
+    callStaticVUHMethod(env, vuh_cls, "enableRegal", "(Z)V", ffi_mod.cast("jboolean", 0))
+    callStaticVUHMethod(env, vuh_cls, "enableDither", "(Z)V", ffi_mod.cast("jboolean", 0))
+
+    local mid_scope = env[0].GetStaticMethodID(env, vuh_cls, "applyAppScopeUpdate", "(Ljava/lang/String;ZIII)V")
+    if mid_scope ~= nil then
+        env[0].CallStaticVoidMethod(
+            env,
+            vuh_cls,
+            mid_scope,
+            ffi_mod.cast("void*", nil),
+            ffi_mod.cast("jboolean", 1),
+            ffi_mod.cast("jint", 2),
+            ffi_mod.cast("jint", target_epd_mode),
+            ffi_mod.cast("jint", 0x7fffffff)
+        )
+        clearJNIException(env)
+
+        local jstr_pkg = env[0].NewStringUTF(env, "org.koreader.launcher")
+        if jstr_pkg ~= nil then
+            env[0].CallStaticVoidMethod(
+                env,
+                vuh_cls,
+                mid_scope,
+                jstr_pkg,
+                ffi_mod.cast("jboolean", 1),
+                ffi_mod.cast("jint", 1),
+                ffi_mod.cast("jint", target_epd_mode),
+                ffi_mod.cast("jint", 0x7fffffff)
+            )
+            clearJNIException(env)
+            env[0].DeleteLocalRef(env, jstr_pkg)
+        else
+            clearJNIException(env)
+        end
+    else
+        clearJNIException(env)
+    end
+end
+
+-- Restores SurfaceFlinger Regal refresh capability for document page turns in ReaderUI.
+local function armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls)
+    callStaticVUHMethod(env, vuh_cls, "byPass", "(I)V", ffi_mod.cast("jint", 0))
+    for _, clear_flag in ipairs({ 0, 1, 2 }) do
+        callStaticVUHMethod(env, vuh_cls, "clearAppScopeUpdate", "(I)V", ffi_mod.cast("jint", clear_flag))
+    end
+    callStaticVUHMethod(env, vuh_cls, "enableRegal", "(Z)V", ffi_mod.cast("jboolean", 1))
+    callStaticVUHMethod(env, vuh_cls, "enableDither", "(Z)V", ffi_mod.cast("jboolean", 0))
+end
+
+local function withViewUpdateHelper(p_android, callback)
+    withJNIEnv(p_android, function(env, ffi_mod)
         local vuh_cls = env[0].FindClass(env, "android/onyx/ViewUpdateHelper")
         if vuh_cls ~= nil then
-            local mid_scheme = env[0].GetStaticMethodID(env, vuh_cls, "setDisplayScheme", "(I)Z")
-            if mid_scheme ~= nil then
-                local res = env[0].CallStaticBooleanMethod(env, vuh_cls, mid_scheme, ffi.cast("jint", 4))
-                logger.info("[BooxRefreshManager] setDisplayScheme(4) returned: " .. tostring(res))
-                applied = true
-            else
-                clearJNIException(env)
-            end
-
-            local mid_af = env[0].GetStaticMethodID(env, vuh_cls, "antiFlicker", "(I)V")
-            if mid_af ~= nil then
-                env[0].CallStaticVoidMethod(env, vuh_cls, mid_af, ffi.cast("jint", 10))
-                logger.info("[BooxRefreshManager] Called antiFlicker(10)")
-                applied = true
-            else
-                clearJNIException(env)
-            end
-
+            callback(env, ffi_mod, vuh_cls)
             env[0].DeleteLocalRef(env, vuh_cls)
         else
             clearJNIException(env)
         end
+    end)
+end
+
+function BooxRefreshManager:applyHardwareDisplayScheme(p_android)
+    local applied = false
+    withViewUpdateHelper(p_android, function(env, ffi, vuh_cls)
+        local mid_scheme = env[0].GetStaticMethodID(env, vuh_cls, "setDisplayScheme", "(I)Z")
+        if mid_scheme ~= nil then
+            local res = env[0].CallStaticBooleanMethod(env, vuh_cls, mid_scheme, ffi.cast("jint", 4))
+            logger.info("[BooxRefreshManager] setDisplayScheme(4) returned: " .. tostring(res))
+            applied = true
+        else
+            clearJNIException(env)
+        end
+
+        local mid_af = env[0].GetStaticMethodID(env, vuh_cls, "antiFlicker", "(I)V")
+        if mid_af ~= nil then
+            env[0].CallStaticVoidMethod(env, vuh_cls, mid_af, ffi.cast("jint", 10))
+            logger.info("[BooxRefreshManager] Called antiFlicker(10)")
+            applied = true
+        else
+            clearJNIException(env)
+        end
+
+        disarmSurfaceFlingerRegal(env, ffi, vuh_cls)
+        logger.info("[BooxRefreshManager] Disarmed SurfaceFlinger Regal: byPass(0), debouncer(false), enableRegal(false), enableDither(false), applyAppScopeUpdate")
+        applied = true
     end)
     return applied
 end
@@ -237,11 +322,11 @@ function BooxRefreshManager:applyOptimalSettings()
     WaveformClamper.enabled = true
     RefreshCoalescer.enabled = true
 
-    -- 2. Apply SurfaceFlinger display scheme / anti-flicker and Boox OS E-Ink Center config
+    -- 2. Apply Boox OS E-Ink Center config first, then SurfaceFlinger display scheme / app-scope override
     local p_android = getAndroidModule()
     if p_android then
-        self:applyHardwareDisplayScheme(p_android)
         self:applyOECAppConfig(p_android, OPTIMAL_REGAL_APP_CONFIG_JSON)
+        self:applyHardwareDisplayScheme(p_android)
     end
 end
 
@@ -250,16 +335,18 @@ function BooxRefreshManager:installScreenHooks(p_android)
         return
     end
 
-    local c_partial_ui, c_delay_ui = 2, 0
-    if p_android and p_android.getEinkConstants then
-        local _, _, _, partial_ui, _, _, delay_ui = p_android.getEinkConstants()
-        c_partial_ui = partial_ui or 2
-        c_delay_ui = delay_ui or 0
-    end
-
     orig_ui_imp = Screen.refreshUIImp
     Screen.refreshUIImp = function(self_scr, x, y, w, h)
         if not WaveformClamper.enabled then
+            return orig_ui_imp(self_scr, x, y, w, h)
+        end
+
+        if WaveformClamper.isReaderDocumentView() then
+            local active_android = p_android or getAndroidModule()
+            withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
+                armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls)
+                logger.info("[BooxRefreshManager] refreshUIImp armed SurfaceFlinger Regal for Reader: byPass(0), clearAppScopeUpdate(0..2), enableRegal(true), enableDither(false)")
+            end)
             return orig_ui_imp(self_scr, x, y, w, h)
         end
 
@@ -313,21 +400,10 @@ function BooxRefreshManager:installScreenHooks(p_android)
                         end
                     end
 
-                    -- Request SurfaceFlinger to bypass the Regal layer pulse for this buffer swap
-                    withJNIEnv(active_android, function(env, ffi_mod)
-                        local vuh = env[0].FindClass(env, "android/onyx/ViewUpdateHelper")
-                        if vuh ~= nil then
-                            local mid = env[0].GetStaticMethodID(env, vuh, "byPass", "(I)V")
-                            if mid ~= nil then
-                                env[0].CallStaticVoidMethod(env, vuh, mid, ffi_mod.cast("jint", 1))
-                                logger.info("[BooxRefreshManager] Called ViewUpdateHelper.byPass(1)")
-                            else
-                                clearJNIException(env)
-                            end
-                            env[0].DeleteLocalRef(env, vuh)
-                        else
-                            clearJNIException(env)
-                        end
+                    -- Disarm SurfaceFlinger debouncer/Regal and apply app-scope EPD mode before posting the buffer
+                    withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
+                        disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls)
+                        logger.info("[BooxRefreshManager] Disarmed SurfaceFlinger Regal: byPass(0), debouncer(false), enableRegal(false), enableDither(false), applyAppScopeUpdate")
                     end)
 
                     active_android.lib.ANativeWindow_unlockAndPost(active_android.app.window)
@@ -339,36 +415,6 @@ function BooxRefreshManager:installScreenHooks(p_android)
             else
                 orig_ui_imp(self_scr, x, y, w, h)
             end
-
-            if active_android and active_android.einkUpdate then
-                local mode = c_partial_ui or 2
-                local delay = c_delay_ui or 0
-                active_android.einkUpdate(mode, delay, rx, ry, (rx + rw), (ry + rh))
-                logger.info(string.format("[BooxRefreshManager] einkUpdate forced mode=%d rect=%d,%d %dx%d",
-                    mode, rx, ry, rw, rh))
-            end
-
-            withJNIEnv(active_android, function(env, ffi_mod)
-                local clazz = env[0].FindClass(env, "android/onyx/ViewUpdateHelper")
-                if clazz ~= nil then
-                    local methodID = env[0].GetStaticMethodID(env, clazz, "refreshScreen", "(IIIII)V")
-                    if methodID ~= nil then
-                        local left = ffi_mod.cast("jint", rx or 0)
-                        local top = ffi_mod.cast("jint", ry or 0)
-                        local width = ffi_mod.cast("jint", rw or 2480)
-                        local height = ffi_mod.cast("jint", rh or 1860)
-                        local m = ffi_mod.cast("jint", 0) -- EINK_UPDATE_MODE_PARTIAL = 0
-                        env[0].CallStaticVoidMethod(env, clazz, methodID, left, top, width, height, m)
-                        logger.info(string.format("[BooxRefreshManager] ViewUpdateHelper.refreshScreen: %d,%d %dx%d mode=0",
-                            tonumber(left), tonumber(top), tonumber(width), tonumber(height)))
-                    else
-                        clearJNIException(env)
-                    end
-                    env[0].DeleteLocalRef(env, clazz)
-                else
-                    clearJNIException(env)
-                end
-            end)
         end)
 
         if not ok_imp then
@@ -376,6 +422,33 @@ function BooxRefreshManager:installScreenHooks(p_android)
             return orig_ui_imp(self_scr, x, y, w, h)
         end
         return true
+    end
+
+    local function wrapReaderRefreshImp(orig_imp, method_name)
+        return function(self_scr, x, y, w, h)
+            if not WaveformClamper.enabled then
+                return orig_imp(self_scr, x, y, w, h)
+            end
+            if not WaveformClamper.isReaderDocumentView() then
+                return Screen.refreshUIImp(self_scr, x, y, w, h)
+            end
+            local active_android = p_android or getAndroidModule()
+            withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
+                armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls)
+                logger.info(string.format("[BooxRefreshManager] %s armed SurfaceFlinger Regal for Reader: byPass(0), clearAppScopeUpdate(0..2), enableRegal(true), enableDither(false)", method_name))
+            end)
+            return orig_imp(self_scr, x, y, w, h)
+        end
+    end
+
+    if Screen.refreshPartialImp and not orig_partial_imp then
+        orig_partial_imp = Screen.refreshPartialImp
+        Screen.refreshPartialImp = wrapReaderRefreshImp(orig_partial_imp, "refreshPartialImp")
+    end
+
+    if Screen.refreshFullImp and not orig_full_imp then
+        orig_full_imp = Screen.refreshFullImp
+        Screen.refreshFullImp = wrapReaderRefreshImp(orig_full_imp, "refreshFullImp")
     end
 end
 
@@ -421,7 +494,7 @@ function BooxRefreshManager:init()
         self:applyOptimalSettings()
     end
 
-    -- Install hardware ARect + byPass(1) Screen.refreshUIImp hook
+    -- Install hardware ARect + SurfaceFlinger Regal suppression Screen hooks
     self:installScreenHooks(p_android)
 
     logger.info(string.format("[BooxRefreshManager] Initialized (enabled: %s, coalesce window: %dms, android: %s)",
@@ -451,6 +524,14 @@ function BooxRefreshManager:onDestroy()
     if orig_ui_imp and Screen then
         Screen.refreshUIImp = orig_ui_imp
         orig_ui_imp = nil
+    end
+    if orig_partial_imp and Screen then
+        Screen.refreshPartialImp = orig_partial_imp
+        orig_partial_imp = nil
+    end
+    if orig_full_imp and Screen then
+        Screen.refreshFullImp = orig_full_imp
+        orig_full_imp = nil
     end
 end
 
@@ -495,7 +576,7 @@ function BooxRefreshManager:addToMainMenu(menu_items)
                             self:applyOptimalSettings()
                         end
                         UIManager:show(InfoMessage:new{
-                            text = _("Optimal Boox settings restored:\n- Regal Flash Suppression: Enabled\n- SurfaceFlinger Scheme: 4 (Animation) / Anti-Flicker 10\n- Hardware ARect + byPass(1): Active\n- Boox E-Ink Center Profile: Regal Plus (updateMode 2)\n- Avoid Flashing UI: Enabled"),
+                            text = _("Optimal Boox settings restored:\n- Regal Flash Suppression: Enabled\n- SurfaceFlinger Scheme: 4 (Animation) / Anti-Flicker 10\n- Hardware ARect + App-Scope EPD Override: Active\n- Boox E-Ink Center Profile: Regal Plus (updateMode 2)\n- Avoid Flashing UI: Enabled"),
                             timeout = 8,
                         })
                     end,
