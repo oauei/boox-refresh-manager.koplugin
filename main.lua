@@ -32,7 +32,27 @@ local orig_full_imp = nil
 local JNI_OK = 0
 local JNI_VERSION_1_6 = 0x00010006
 
-local OPTIMAL_REGAL_APP_CONFIG_JSON = '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":false,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"regal_plus","refreshModeIndex":"refresh_mode_1","supportRegal":true,"turbo":0,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":false}'
+local function getReaderRegalMode()
+    if G_reader_settings and G_reader_settings.readSetting then
+        local mode = G_reader_settings:readSetting("boox_refresh_manager_reader_regal_mode")
+        if mode == "regal" or mode == "regal_plus" then
+            return mode
+        end
+    end
+    return "regal_plus"
+end
+
+local function buildRegalAppConfigJSON(reader_regal_mode)
+    local mode = (reader_regal_mode == "regal") and "regal" or "regal_plus"
+    local update_mode = (mode == "regal") and 3 or 5
+    return string.format(
+        '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":false,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"%s","refreshModeIndex":"refresh_mode_1","supportRegal":true,"turbo":0,"updateMode":%d,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":false}',
+        mode,
+        update_mode
+    )
+end
+
+local OPTIMAL_REGAL_APP_CONFIG_JSON = buildRegalAppConfigJSON("regal_plus")
 
 local function getAndroidModule()
     if package.loaded["android"] then
@@ -188,26 +208,76 @@ local function disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls, epd_mode)
 end
 
 -- Restores native SurfaceFlinger Regal anti-ghosting, SCHEME_NORMAL, hardware dithering, and debouncer for ReaderUI.
-local function armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls)
+local function armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls, reader_regal_mode)
+    local mode = reader_regal_mode or getReaderRegalMode()
     callStaticVUHMethod(env, vuh_cls, "byPass", "(I)V", ffi_mod.cast("jint", 0))
+    local mid_scope = env[0].GetStaticMethodID(env, vuh_cls, "applyAppScopeUpdate", "(Ljava/lang/String;ZIII)V")
+    if mid_scope ~= nil then
+        env[0].CallStaticVoidMethod(
+            env,
+            vuh_cls,
+            mid_scope,
+            ffi_mod.cast("void*", nil),
+            ffi_mod.cast("jboolean", 0),
+            ffi_mod.cast("jint", 2),
+            ffi_mod.cast("jint", 5),
+            ffi_mod.cast("jint", 0)
+        )
+        clearJNIException(env)
+        local jstr_pkg = env[0].NewStringUTF(env, "org.koreader.launcher")
+        if jstr_pkg ~= nil then
+            env[0].CallStaticVoidMethod(
+                env,
+                vuh_cls,
+                mid_scope,
+                jstr_pkg,
+                ffi_mod.cast("jboolean", 0),
+                ffi_mod.cast("jint", 1),
+                ffi_mod.cast("jint", 5),
+                ffi_mod.cast("jint", 0)
+            )
+            clearJNIException(env)
+            env[0].DeleteLocalRef(env, jstr_pkg)
+        else
+            clearJNIException(env)
+        end
+    else
+        clearJNIException(env)
+    end
     for _, clear_flag in ipairs({ 0, 1, 2 }) do
         callStaticVUHMethod(env, vuh_cls, "clearAppScopeUpdate", "(I)V", ffi_mod.cast("jint", clear_flag))
     end
     callStaticVUHBooleanMethod(env, vuh_cls, "setDisplayScheme", "(I)Z", ffi_mod.cast("jint", 1))
     callStaticVUHMethod(env, vuh_cls, "antiFlicker", "(I)V", ffi_mod.cast("jint", 0))
-    callStaticVUHMethod(env, vuh_cls, "enableRegal", "(Z)V", ffi_mod.cast("jboolean", 1))
     callStaticVUHMethod(env, vuh_cls, "enableDither", "(Z)V", ffi_mod.cast("jboolean", 1))
-    callStaticVUHMethod(
-        env,
-        vuh_cls,
-        "debouncer",
-        "(ZIIII)V",
-        ffi_mod.cast("jboolean", 1),
-        ffi_mod.cast("jint", 5),
-        ffi_mod.cast("jint", 150),
-        ffi_mod.cast("jint", 450),
-        ffi_mod.cast("jint", 20)
-    )
+    if mode == "regal" then
+        callStaticVUHMethod(
+            env,
+            vuh_cls,
+            "debouncer",
+            "(ZIIII)V",
+            ffi_mod.cast("jboolean", 0),
+            ffi_mod.cast("jint", 0),
+            ffi_mod.cast("jint", 0),
+            ffi_mod.cast("jint", 0),
+            ffi_mod.cast("jint", 0)
+        )
+    else
+        callStaticVUHMethod(
+            env,
+            vuh_cls,
+            "debouncer",
+            "(ZIIII)V",
+            ffi_mod.cast("jboolean", 1),
+            ffi_mod.cast("jint", 5),
+            ffi_mod.cast("jint", 150),
+            ffi_mod.cast("jint", 450),
+            ffi_mod.cast("jint", 20)
+        )
+    end
+    callStaticVUHMethod(env, vuh_cls, "enableRegal", "(Z)V", ffi_mod.cast("jboolean", 1))
+    local transient_epd_mode = (mode == "regal") and 6 or 9
+    callStaticVUHMethod(env, vuh_cls, "setDebouncerTransientUpdateMode", "(I)V", ffi_mod.cast("jint", transient_epd_mode))
 end
 
 local function withViewUpdateHelper(p_android, callback)
@@ -231,7 +301,7 @@ function BooxRefreshManager:applyHardwareDisplayScheme(p_android)
 end
 
 function BooxRefreshManager:applyOECAppConfig(p_android, json_str)
-    json_str = json_str or OPTIMAL_REGAL_APP_CONFIG_JSON
+    json_str = json_str or buildRegalAppConfigJSON(getReaderRegalMode())
     local success = false
     withJNIEnv(p_android, function(env, ffi)
         local list_cls = env[0].FindClass(env, "java/util/ArrayList")
@@ -330,7 +400,7 @@ function BooxRefreshManager:applyOptimalSettings()
     -- 2. Apply Boox OS E-Ink Center config first, then SurfaceFlinger display scheme / app-scope override
     local p_android = getAndroidModule()
     if p_android then
-        self:applyOECAppConfig(p_android, OPTIMAL_REGAL_APP_CONFIG_JSON)
+        self:applyOECAppConfig(p_android, buildRegalAppConfigJSON(getReaderRegalMode()))
         self:applyHardwareDisplayScheme(p_android)
     end
 end
@@ -349,8 +419,10 @@ function BooxRefreshManager:installScreenHooks(p_android)
         if WaveformClamper.isReaderDocumentView() then
             local active_android = p_android or getAndroidModule()
             withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
-                armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls)
-                logger.info("[BooxRefreshManager] refreshUIImp armed SurfaceFlinger Regal for Reader: byPass(0), clearAppScopeUpdate(0..2), enableRegal(true), enableDither(false)")
+                local mode = getReaderRegalMode()
+                armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls, mode)
+                logger.info(string.format("[BooxRefreshManager] refreshUIImp armed SurfaceFlinger Regal (%s) for Reader: scheme(1), antiFlicker(0), byPass(0), clearAppScopeUpdate(0..2), enableRegal(true), enableDither(true), debouncer(%s)",
+                    mode, tostring(mode ~= "regal")))
             end)
             return orig_ui_imp(self_scr, x, y, w, h)
         end
@@ -439,8 +511,10 @@ function BooxRefreshManager:installScreenHooks(p_android)
             end
             local active_android = p_android or getAndroidModule()
             withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
-                armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls)
-                logger.info(string.format("[BooxRefreshManager] %s armed SurfaceFlinger Regal for Reader: byPass(0), clearAppScopeUpdate(0..2), enableRegal(true), enableDither(false)", method_name))
+                local mode = getReaderRegalMode()
+                armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls, mode)
+                logger.info(string.format("[BooxRefreshManager] %s armed SurfaceFlinger Regal (%s) for Reader: scheme(1), antiFlicker(0), byPass(0), clearAppScopeUpdate(0..2), enableRegal(true), enableDither(true), debouncer(%s)",
+                    method_name, mode, tostring(mode ~= "regal")))
             end)
             return orig_imp(self_scr, x, y, w, h)
         end
@@ -571,6 +645,52 @@ function BooxRefreshManager:addToMainMenu(menu_items)
                     end,
                 },
                 {
+                    text = _("Reader Regal Mode"),
+                    help_text = _("Choose which Boox Regal profile is applied for in-book reading (Regal Plus [updateMode 5] is the default; Regal [updateMode 3] disables the SurfaceFlinger debouncer)."),
+                    keep_menu_open = true,
+                    sub_item_table_func = function()
+                        local function selectReaderRegalMode(mode, touchmenu_instance)
+                            if G_reader_settings and G_reader_settings.saveSetting then
+                                G_reader_settings:saveSetting("boox_refresh_manager_reader_regal_mode", mode)
+                                pcall(function() G_reader_settings:flush() end)
+                            end
+                            local mgr = BooxRefreshManager.instance or self
+                            if WaveformClamper.enabled and mgr and mgr.applyOptimalSettings then
+                                mgr:applyOptimalSettings()
+                            end
+                            if touchmenu_instance and touchmenu_instance.updateItems then
+                                touchmenu_instance:updateItems()
+                            end
+                        end
+                        return {
+                            {
+                                text = _("Regal Plus (Default)"),
+                                help_text = _("Uses Boox UPDATE_MODE_REGAL_PLUS (updateMode 5) with SurfaceFlinger debouncer enabled for in-book reading."),
+                                radio = true,
+                                checked_func = function()
+                                    return getReaderRegalMode() == "regal_plus"
+                                end,
+                                keep_menu_open = true,
+                                callback = function(touchmenu_instance)
+                                    selectReaderRegalMode("regal_plus", touchmenu_instance)
+                                end,
+                            },
+                            {
+                                text = _("Regal"),
+                                help_text = _("Uses Boox UPDATE_MODE_REGAL (updateMode 3) without the SurfaceFlinger debouncer for in-book reading."),
+                                radio = true,
+                                checked_func = function()
+                                    return getReaderRegalMode() == "regal"
+                                end,
+                                keep_menu_open = true,
+                                callback = function(touchmenu_instance)
+                                    selectReaderRegalMode("regal", touchmenu_instance)
+                                end,
+                            },
+                        }
+                    end,
+                },
+                {
                     text = _("Restore Optimal Boox Settings"),
                     help_text = _("Restores all optimal Boox and KOReader settings: Regal Flash Suppression, SurfaceFlinger Display Scheme 4, Anti-Flicker 10, Boox E-Ink Center Regal profile, and Avoid Flashing UI."),
                     keep_menu_open = false,
@@ -580,8 +700,10 @@ function BooxRefreshManager:addToMainMenu(menu_items)
                         else
                             self:applyOptimalSettings()
                         end
+                        local mode = getReaderRegalMode()
+                        local mode_desc = (mode == "regal") and "Regal (updateMode 3)" or "Regal Plus (updateMode 5)"
                         UIManager:show(InfoMessage:new{
-                            text = _("Optimal Boox settings restored:\n- Regal Flash Suppression: Enabled\n- SurfaceFlinger Scheme: 4 (Animation) / Anti-Flicker 10\n- Hardware ARect + App-Scope EPD Override: Active\n- Boox E-Ink Center Profile: Regal Plus (updateMode 2)\n- Avoid Flashing UI: Enabled"),
+                            text = string.format(_("Optimal Boox settings restored:\n- Regal Flash Suppression: Enabled\n- SurfaceFlinger Scheme: 4 (Animation) / Anti-Flicker 10\n- Hardware ARect + App-Scope EPD Override: Active\n- Boox E-Ink Center Profile: %s\n- Avoid Flashing UI: Enabled"), mode_desc),
                             timeout = 8,
                         })
                     end,
@@ -618,5 +740,7 @@ end
 
 BooxRefreshManager._withJNIEnv = withJNIEnv
 BooxRefreshManager._OPTIMAL_REGAL_APP_CONFIG_JSON = OPTIMAL_REGAL_APP_CONFIG_JSON
+BooxRefreshManager._buildRegalAppConfigJSON = buildRegalAppConfigJSON
+BooxRefreshManager._getReaderRegalMode = getReaderRegalMode
 
 return BooxRefreshManager
