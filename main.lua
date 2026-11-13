@@ -32,7 +32,7 @@ local orig_full_imp = nil
 local JNI_OK = 0
 local JNI_VERSION_1_6 = 0x00010006
 
-local OPTIMAL_REGAL_APP_CONFIG_JSON = '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":false,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":10,"enable":true,"gcInterval":20,"refreshModeAlias":"regal_plus","refreshModeIndex":"refresh_mode_1","supportRegal":false,"turbo":0,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":false}'
+local OPTIMAL_REGAL_APP_CONFIG_JSON = '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":false,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"regal_plus","refreshModeIndex":"refresh_mode_1","supportRegal":true,"turbo":0,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":false}'
 
 local function getAndroidModule()
     if package.loaded["android"] then
@@ -119,11 +119,23 @@ local function callStaticVUHMethod(env, vuh_cls, name, sig, ...)
     clearJNIException(env)
 end
 
--- Resets byPass(0), disables SurfaceFlinger's debouncer/Regal/dither, and applies app-scope EPD mode
--- so UI/Menu/Bookshelf partial buffer swaps update immediately without triggering a waveform 16 white flash.
+local function callStaticVUHBooleanMethod(env, vuh_cls, name, sig, ...)
+    local mid = env[0].GetStaticMethodID(env, vuh_cls, name, sig)
+    local res = nil
+    if mid ~= nil then
+        res = env[0].CallStaticBooleanMethod(env, vuh_cls, mid, ...)
+    end
+    clearJNIException(env)
+    return res
+end
+
+-- Resets byPass(0), applies UI animation scheme/anti-flicker, disables SurfaceFlinger's debouncer/Regal/dither,
+-- and applies app-scope EPD mode so UI/Menu/Bookshelf partial buffer swaps update without waveform 16 white flashes.
 local function disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls, epd_mode)
     local target_epd_mode = epd_mode or WaveformClamper.ui_epd_mode or 5
 
+    callStaticVUHBooleanMethod(env, vuh_cls, "setDisplayScheme", "(I)Z", ffi_mod.cast("jint", 4))
+    callStaticVUHMethod(env, vuh_cls, "antiFlicker", "(I)V", ffi_mod.cast("jint", 10))
     callStaticVUHMethod(env, vuh_cls, "byPass", "(I)V", ffi_mod.cast("jint", 0))
     callStaticVUHMethod(
         env,
@@ -175,14 +187,27 @@ local function disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls, epd_mode)
     end
 end
 
--- Restores SurfaceFlinger Regal refresh capability for document page turns in ReaderUI.
+-- Restores native SurfaceFlinger Regal anti-ghosting, SCHEME_NORMAL, hardware dithering, and debouncer for ReaderUI.
 local function armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls)
     callStaticVUHMethod(env, vuh_cls, "byPass", "(I)V", ffi_mod.cast("jint", 0))
     for _, clear_flag in ipairs({ 0, 1, 2 }) do
         callStaticVUHMethod(env, vuh_cls, "clearAppScopeUpdate", "(I)V", ffi_mod.cast("jint", clear_flag))
     end
+    callStaticVUHBooleanMethod(env, vuh_cls, "setDisplayScheme", "(I)Z", ffi_mod.cast("jint", 1))
+    callStaticVUHMethod(env, vuh_cls, "antiFlicker", "(I)V", ffi_mod.cast("jint", 0))
     callStaticVUHMethod(env, vuh_cls, "enableRegal", "(Z)V", ffi_mod.cast("jboolean", 1))
-    callStaticVUHMethod(env, vuh_cls, "enableDither", "(Z)V", ffi_mod.cast("jboolean", 0))
+    callStaticVUHMethod(env, vuh_cls, "enableDither", "(Z)V", ffi_mod.cast("jboolean", 1))
+    callStaticVUHMethod(
+        env,
+        vuh_cls,
+        "debouncer",
+        "(ZIIII)V",
+        ffi_mod.cast("jboolean", 1),
+        ffi_mod.cast("jint", 5),
+        ffi_mod.cast("jint", 150),
+        ffi_mod.cast("jint", 450),
+        ffi_mod.cast("jint", 20)
+    )
 end
 
 local function withViewUpdateHelper(p_android, callback)
@@ -198,31 +223,11 @@ local function withViewUpdateHelper(p_android, callback)
 end
 
 function BooxRefreshManager:applyHardwareDisplayScheme(p_android)
-    local applied = false
     withViewUpdateHelper(p_android, function(env, ffi, vuh_cls)
-        local mid_scheme = env[0].GetStaticMethodID(env, vuh_cls, "setDisplayScheme", "(I)Z")
-        if mid_scheme ~= nil then
-            local res = env[0].CallStaticBooleanMethod(env, vuh_cls, mid_scheme, ffi.cast("jint", 4))
-            logger.info("[BooxRefreshManager] setDisplayScheme(4) returned: " .. tostring(res))
-            applied = true
-        else
-            clearJNIException(env)
-        end
-
-        local mid_af = env[0].GetStaticMethodID(env, vuh_cls, "antiFlicker", "(I)V")
-        if mid_af ~= nil then
-            env[0].CallStaticVoidMethod(env, vuh_cls, mid_af, ffi.cast("jint", 10))
-            logger.info("[BooxRefreshManager] Called antiFlicker(10)")
-            applied = true
-        else
-            clearJNIException(env)
-        end
-
         disarmSurfaceFlingerRegal(env, ffi, vuh_cls)
-        logger.info("[BooxRefreshManager] Disarmed SurfaceFlinger Regal: byPass(0), debouncer(false), enableRegal(false), enableDither(false), applyAppScopeUpdate")
-        applied = true
+        logger.info("[BooxRefreshManager] Disarmed SurfaceFlinger Regal: scheme(4), antiFlicker(10), byPass(0), debouncer(false), enableRegal(false), enableDither(false), applyAppScopeUpdate")
     end)
-    return applied
+    return true
 end
 
 function BooxRefreshManager:applyOECAppConfig(p_android, json_str)
