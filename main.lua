@@ -55,17 +55,45 @@ local function getReaderRegalMode()
     return "regal_plus"
 end
 
+local _REGAL_CONFIG_JSON = nil
+local _REGAL_PLUS_CONFIG_JSON = nil
+
 local function buildRegalAppConfigJSON(reader_regal_mode)
     local mode = (reader_regal_mode == "regal") and "regal" or "regal_plus"
+    if mode == "regal" and _REGAL_CONFIG_JSON then
+        return _REGAL_CONFIG_JSON
+    elseif mode == "regal_plus" and _REGAL_PLUS_CONFIG_JSON then
+        return _REGAL_PLUS_CONFIG_JSON
+    end
     local update_mode = (mode == "regal") and 3 or 5
-    return string.format(
+    local str = string.format(
         '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":false,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"%s","refreshModeIndex":"refresh_mode_1","supportRegal":true,"turbo":0,"updateMode":%d,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":false}',
         mode,
         update_mode
     )
+    if mode == "regal" then
+        _REGAL_CONFIG_JSON = str
+    else
+        _REGAL_PLUS_CONFIG_JSON = str
+    end
+    return str
 end
 
-local OPTIMAL_REGAL_APP_CONFIG_JSON = buildRegalAppConfigJSON("regal_plus")
+_REGAL_CONFIG_JSON = buildRegalAppConfigJSON("regal")
+_REGAL_PLUS_CONFIG_JSON = buildRegalAppConfigJSON("regal_plus")
+local OPTIMAL_REGAL_APP_CONFIG_JSON = _REGAL_PLUS_CONFIG_JSON
+
+local function buildSmoothAppConfigJSON()
+    return '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":1,"enable":true,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"smooth","refreshModeIndex":"refresh_mode_5","supportRegal":false,"turbo":7,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":true}'
+end
+
+local SMOOTH_APP_CONFIG_JSON = buildSmoothAppConfigJSON()
+local scroll_oec_smooth_active = false
+local scroll_app_scope_dirty = false
+
+local function isContinuousScrollSession()
+    return active_scroll_view ~= nil and active_scroll_view.page_scroll == true
+end
 
 local function buildSmoothAppConfigJSON()
     return '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":1,"enable":true,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"smooth","refreshModeIndex":"refresh_mode_5","supportRegal":false,"turbo":7,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":true}'
@@ -468,6 +496,38 @@ local function isValidNativeWindow(ffi_mod, win)
     return true
 end
 
+local mod_ffi = nil
+local function getFFI()
+    if mod_ffi == nil then
+        local ok_ffi, ffi = pcall(require, "ffi")
+        mod_ffi = (ok_ffi and ffi) or false
+    end
+    return mod_ffi or nil
+end
+
+local mod_BB = nil
+local function getBlitBuffer()
+    if mod_BB == nil then
+        local ok_bb, BB = pcall(require, "ffi/blitbuffer")
+        mod_BB = (ok_bb and BB) or false
+    end
+    return mod_BB or nil
+end
+
+local static_anw_buffer = nil
+local static_arect = nil
+local function getStaticBuffers(ffi)
+    if not static_anw_buffer and ffi then
+        local ok_buf, buf = pcall(ffi.new, "ANativeWindow_Buffer[1]")
+        if ok_buf then static_anw_buffer = buf end
+    end
+    if not static_arect and ffi then
+        local ok_rect, r = pcall(ffi.new, "ARect")
+        if ok_rect then static_arect = r end
+    end
+    return static_anw_buffer, static_arect
+end
+
 function BooxRefreshManager:installScreenHooks(p_android)
     if not Screen or orig_ui_imp or not Screen.refreshUIImp then
         return
@@ -518,44 +578,65 @@ function BooxRefreshManager:installScreenHooks(p_android)
                 rh = h or (self_scr.getHeight and self_scr:getHeight() or 1860)
             end
 
-            local ok_ffi, ffi = pcall(require, "ffi")
-            if ok_ffi and ffi and active_android and active_android.app
+            local ffi = getFFI()
+            if ffi and active_android and active_android.app
                 and isValidNativeWindow(ffi, active_android.app.window)
                 and active_android.lib
             then
-                local buffer = ffi.new("ANativeWindow_Buffer[1]")
+                local s_buf, s_rect = getStaticBuffers(ffi)
+                local buffer = s_buf or ffi.new("ANativeWindow_Buffer[1]")
                 local dirty_rect = nil
-                if rx and ry and rw and rh and rw > 0 and rh > 0 and (rw < 2480 or rh < 1860) then
-                    dirty_rect = ffi.new("ARect", { left = rx, top = ry, right = rx + rw, bottom = ry + rh })
+                local screen_w = self_scr.getWidth and self_scr:getWidth() or 2480
+                local screen_h = self_scr.getHeight and self_scr:getHeight() or 1860
+                if rx and ry and rw and rh and (ry + rh > screen_h) and (ry + rh <= screen_w) then
+                    screen_w, screen_h = screen_h, screen_w
+                end
+                local clamp_left = math.max(0, math.min(screen_w, rx or 0))
+                local clamp_top = math.max(0, math.min(screen_h, ry or 0))
+                local clamp_right = math.max(clamp_left, math.min(screen_w, (rx or 0) + (rw or screen_w)))
+                local clamp_bottom = math.max(clamp_top, math.min(screen_h, (ry or 0) + (rh or screen_h)))
+
+                if rw and rh and rw > 0 and rh > 0 and (rw < screen_w or rh < screen_h) then
+                    if s_rect then
+                        s_rect.left = clamp_left
+                        s_rect.top = clamp_top
+                        s_rect.right = clamp_right
+                        s_rect.bottom = clamp_bottom
+                        dirty_rect = s_rect
+                    else
+                        dirty_rect = ffi.new("ARect", { left = clamp_left, top = clamp_top, right = clamp_right, bottom = clamp_bottom })
+                    end
                 end
 
                 if active_android.lib.ANativeWindow_lock(active_android.app.window, buffer, dirty_rect) == 0 then
-                    local ok_bb, BB = pcall(require, "ffi/blitbuffer")
-                    if ok_bb and BB then
-                        local win_bb = nil
-                        if buffer[0].format == 1 or buffer[0].format == 2 then
-                            win_bb = BB.new(buffer[0].width, buffer[0].height, BB.TYPE_BBRGB32, buffer[0].bits, buffer[0].stride * 4, buffer[0].stride)
-                        elseif buffer[0].format == 4 then
-                            win_bb = BB.new(buffer[0].width, buffer[0].height, BB.TYPE_BBRGB16, buffer[0].bits, buffer[0].stride * 2, buffer[0].stride)
-                        end
-                        if win_bb then
-                            local ext_bb = self_scr.full_bb or self_scr.bb
-                            if ext_bb then
-                                win_bb:setInverse(ext_bb:getInverse())
-                                win_bb:setRotation(ext_bb:getRotation())
-                                if win_bb:getInverse() == 1 and BB.getUseCBB and BB:getUseCBB() then
-                                    if win_bb:getType() == ext_bb:getType() then
-                                        win_bb:invertblitFrom(ext_bb)
+                    local ok_blit, blit_err = pcall(function()
+                        local BB = getBlitBuffer()
+                        if BB then
+                            local win_bb = nil
+                            if buffer[0].format == 1 or buffer[0].format == 2 then
+                                win_bb = BB.new(buffer[0].width, buffer[0].height, BB.TYPE_BBRGB32, buffer[0].bits, buffer[0].stride * 4, buffer[0].stride)
+                            elseif buffer[0].format == 4 then
+                                win_bb = BB.new(buffer[0].width, buffer[0].height, BB.TYPE_BBRGB16, buffer[0].bits, buffer[0].stride * 2, buffer[0].stride)
+                            end
+                            if win_bb then
+                                local ext_bb = self_scr.full_bb or self_scr.bb
+                                if ext_bb then
+                                    win_bb:setInverse(ext_bb:getInverse())
+                                    win_bb:setRotation(ext_bb:getRotation())
+                                    if win_bb:getInverse() == 1 and BB.getUseCBB and BB:getUseCBB() then
+                                        if win_bb:getType() == ext_bb:getType() then
+                                            win_bb:invertblitFrom(ext_bb)
+                                        else
+                                            win_bb:blitFrom(ext_bb)
+                                            win_bb:invertRect(0, 0, win_bb:getWidth(), win_bb:getHeight())
+                                        end
                                     else
                                         win_bb:blitFrom(ext_bb)
-                                        win_bb:invertRect(0, 0, win_bb:getWidth(), win_bb:getHeight())
                                     end
-                                else
-                                    win_bb:blitFrom(ext_bb)
                                 end
                             end
                         end
-                    end
+                    end)
 
                     -- Disarm SurfaceFlinger debouncer/Regal once per scroll pan (skip redundant per-frame JNI calls)
                     if WaveformClamper.scroll_pan_active and scroll_releasing and rescheduleScrollSettle then
@@ -602,9 +683,12 @@ function BooxRefreshManager:installScreenHooks(p_android)
                     end
 
                     active_android.lib.ANativeWindow_unlockAndPost(active_android.app.window)
+                    if not ok_blit then
+                        logger.warn("[BooxRefreshManager] Blit operation failed: " .. tostring(blit_err))
+                    end
                     if not (WaveformClamper.scroll_pan_active and scroll_sf_disarmed) then
                         logger.info(string.format("[BooxRefreshManager] ANativeWindow_lock with ARect: %d,%d to %d,%d",
-                            rx, ry, rx + rw, ry + rh))
+                            clamp_left, clamp_top, clamp_right, clamp_bottom))
                     end
                 else
                     orig_ui_imp(self_scr, x, y, w, h)
@@ -731,8 +815,12 @@ local scroll_inertia_cb = nil
 local scroll_dither_override_cb = nil
 
 local function getScrollTime()
-    local ok_tv, TimeVal = pcall(require, "ui/time")
-    if ok_tv and TimeVal and TimeVal.now then
+    local TimeVal = package.loaded["ui/time"]
+    if not TimeVal then
+        local ok_tv, tv = pcall(require, "ui/time")
+        if ok_tv then TimeVal = tv end
+    end
+    if TimeVal and TimeVal.now then
         local t = TimeVal:now()
         if type(t) == "number" then
             if TimeVal.to_s then
@@ -1148,7 +1236,6 @@ function BooxRefreshManager:onSuspend()
     scroll_sf_disarmed = false
     scroll_oec_smooth_active = false
     scroll_app_scope_dirty = false
-    scroll_app_scope_dirty = false
     scroll_releasing = false
     active_scroll_view = nil
     RefreshCoalescer.flush()
@@ -1163,7 +1250,6 @@ function BooxRefreshManager:onPause()
     WaveformClamper.scroll_pan_active = false
     scroll_sf_disarmed = false
     scroll_oec_smooth_active = false
-    scroll_app_scope_dirty = false
     scroll_app_scope_dirty = false
     scroll_releasing = false
     active_scroll_view = nil
@@ -1183,7 +1269,6 @@ function BooxRefreshManager:onDestroy()
     WaveformClamper.scroll_pan_active = false
     scroll_sf_disarmed = false
     scroll_oec_smooth_active = false
-    scroll_app_scope_dirty = false
     scroll_app_scope_dirty = false
     scroll_releasing = false
     active_scroll_view = nil

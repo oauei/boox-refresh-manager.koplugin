@@ -29,6 +29,12 @@ function RefreshCoalescer.init(clamper, ui_mgr, screen_mgr, log_mgr)
     logger = log_mgr or require("logger")
 end
 
+local _reusable_rect = { x = 0, y = 0, w = 0, h = 0, d = nil }
+
+local function _static_flush_cb()
+    RefreshCoalescer.flush()
+end
+
 function RefreshCoalescer.queueRefresh(x, y, w, h, d)
     if not Screen then return end
 
@@ -39,13 +45,12 @@ function RefreshCoalescer.queueRefresh(x, y, w, h, d)
     end
 
     if not RefreshCoalescer.merged_rect then
-        RefreshCoalescer.merged_rect = {
-            x = x,
-            y = y,
-            w = w,
-            h = h,
-            d = d,
-        }
+        _reusable_rect.x = x
+        _reusable_rect.y = y
+        _reusable_rect.w = w
+        _reusable_rect.h = h
+        _reusable_rect.d = d
+        RefreshCoalescer.merged_rect = _reusable_rect
     else
         local mr = RefreshCoalescer.merged_rect
         local min_x = math.min(mr.x, x)
@@ -60,9 +65,7 @@ function RefreshCoalescer.queueRefresh(x, y, w, h, d)
     end
 
     if not RefreshCoalescer.flush_callback and UIManager and UIManager.scheduleIn then
-        RefreshCoalescer.flush_callback = function()
-            RefreshCoalescer.flush()
-        end
+        RefreshCoalescer.flush_callback = _static_flush_cb
         UIManager:scheduleIn(RefreshCoalescer.coalesce_window_s, RefreshCoalescer.flush_callback)
     end
 end
