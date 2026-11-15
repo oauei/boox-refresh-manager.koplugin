@@ -4,6 +4,8 @@
 
 local WaveformClamper = {
     enabled = true,
+    scroll_pan_active = false,
+    scroll_epd_mode = 2,
 }
 
 local UIManager = nil
@@ -70,8 +72,14 @@ function WaveformClamper.clampMode(widget, mode)
         return "ui"
     end
 
-    -- In document reader mode without dialogs, preserve all native reader waveforms
+    -- In document reader mode without dialogs, clamp to smooth "ui" mode while actively
+    -- drag-scrolling in continuous scroll mode, otherwise preserve native reader waveforms.
     if WaveformClamper.isReaderDocumentView() then
+        if WaveformClamper.scroll_pan_active then
+            if mode == "fast" or mode == "partial" or mode == "flashpartial" or mode == "full" or mode == "flashui" then
+                return "ui"
+            end
+        end
         return mode
     end
 

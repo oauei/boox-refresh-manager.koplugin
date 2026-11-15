@@ -14,6 +14,7 @@ local RefreshCoalescer = {
     merged_rect = nil,
     flush_callback = nil,
     orig_refreshUI = nil,
+    orig_refreshFast = nil,
     orig_refreshFull = nil,
     orig_refreshFlashUI = nil,
     orig_refreshFlashPartial = nil,
@@ -98,6 +99,8 @@ function RefreshCoalescer.installHooks()
     if RefreshCoalescer.hooked or not Screen then return end
 
     RefreshCoalescer.orig_refreshUI = Screen.refreshUI
+    RefreshCoalescer.orig_refreshPartial = Screen.refreshPartial
+    RefreshCoalescer.orig_refreshFast = Screen.refreshFast
     RefreshCoalescer.orig_refreshFull = Screen.refreshFull
     RefreshCoalescer.orig_refreshFlashUI = Screen.refreshFlashUI
     RefreshCoalescer.orig_refreshFlashPartial = Screen.refreshFlashPartial
@@ -127,6 +130,22 @@ function RefreshCoalescer.installHooks()
         RefreshCoalescer.queueRefresh(x, y, w, h, d)
     end
 
+    -- Hook Screen:refreshPartial (divert to refreshUI during continuous scroll pan)
+    if Screen.refreshPartial then
+        Screen.refreshPartial = function(self_scr, x, y, w, h, d)
+            if RefreshCoalescer.enabled
+                and WaveformClamper
+                and WaveformClamper.scroll_pan_active
+                and WaveformClamper.isReaderDocumentView()
+            then
+                return Screen.refreshUI(self_scr, x, y, w, h, d)
+            end
+            if RefreshCoalescer.orig_refreshPartial then
+                return RefreshCoalescer.orig_refreshPartial(self_scr, x, y, w, h, d)
+            end
+        end
+    end
+
     -- Hook Screen:refreshFull
     Screen.refreshFull = function(self_scr, x, y, w, h, d)
         if not RefreshCoalescer.enabled then
@@ -136,8 +155,12 @@ function RefreshCoalescer.installHooks()
             return
         end
 
-        -- Document page turns in ReaderUI are allowed to perform native full refreshes
+        -- Document page turns in ReaderUI are allowed to perform native full refreshes,
+        -- unless we are actively drag-scrolling in continuous scroll mode.
         if WaveformClamper and WaveformClamper.isReaderDocumentView() then
+            if WaveformClamper.scroll_pan_active then
+                return Screen.refreshUI(self_scr, x, y, w, h, d)
+            end
             if RefreshCoalescer.merged_rect then
                 RefreshCoalescer.flush()
             end
@@ -187,6 +210,18 @@ function RefreshCoalescer.installHooks()
         end
     end
 
+    -- Hook Screen:refreshFast
+    if Screen.refreshFast then
+        Screen.refreshFast = function(self_scr, x, y, w, h, d)
+            if RefreshCoalescer.enabled and WaveformClamper and WaveformClamper.scroll_pan_active then
+                return Screen.refreshUI(self_scr, x, y, w, h, d)
+            end
+            if RefreshCoalescer.orig_refreshFast then
+                return RefreshCoalescer.orig_refreshFast(self_scr, x, y, w, h, d)
+            end
+        end
+    end
+
     -- Hook Screen:yieldToEPDC
     Screen.yieldToEPDC = function(self_scr, us)
         if not RefreshCoalescer.enabled then
@@ -196,8 +231,8 @@ function RefreshCoalescer.installHooks()
             return
         end
 
-        -- Suppress EPDC stalls and hardware flasher triggers during multi-slice UI animations
-        if not (WaveformClamper and WaveformClamper.isReaderDocumentView()) then
+        -- Suppress EPDC stalls and hardware flasher triggers during multi-slice UI animations or active scroll pan
+        if not (WaveformClamper and WaveformClamper.isReaderDocumentView()) or (WaveformClamper and WaveformClamper.scroll_pan_active) then
             return
         end
 
@@ -220,6 +255,14 @@ function RefreshCoalescer.removeHooks()
     if RefreshCoalescer.orig_refreshUI then
         Screen.refreshUI = RefreshCoalescer.orig_refreshUI
         RefreshCoalescer.orig_refreshUI = nil
+    end
+    if RefreshCoalescer.orig_refreshPartial then
+        Screen.refreshPartial = RefreshCoalescer.orig_refreshPartial
+        RefreshCoalescer.orig_refreshPartial = nil
+    end
+    if RefreshCoalescer.orig_refreshFast then
+        Screen.refreshFast = RefreshCoalescer.orig_refreshFast
+        RefreshCoalescer.orig_refreshFast = nil
     end
     if RefreshCoalescer.orig_refreshFull then
         Screen.refreshFull = RefreshCoalescer.orig_refreshFull
