@@ -128,8 +128,18 @@ local function clearJNIException(env)
     return false
 end
 
--- Re-entrant-safe JNI helper: avoids detaching an already-attached JVM thread
--- and clears any pending Java exception so ART never aborts on return.
+local function runWithEnv(env, ffi, fn)
+    local ok, res = pcall(fn, env, ffi)
+    clearJNIException(env)
+    if not ok and logger and logger.warn then
+        logger.warn("[BooxRefreshManager] JNI error: " .. tostring(res))
+    end
+    return ok, res
+end
+
+-- Re-entrant-safe JNI helper: prefers KOReader's p_android.jni wrapper when available,
+-- avoids detaching an already-attached JVM thread, and clears any pending Java exception
+-- so ART never aborts on return.
 local function withJNIEnv(p_android, fn)
     if not (p_android and p_android.app and p_android.app.activity and p_android.app.activity.vm) then
         return false
@@ -142,6 +152,23 @@ local function withJNIEnv(p_android, fn)
     local jvm = p_android.app.activity.vm
     if jvm == nil or jvm[0] == nil then
         return false
+    end
+
+    if p_android.jni then
+        if type(p_android.jni.context) == "function" then
+            local ok_ctx, ok_fn, res_fn = pcall(p_android.jni.context, p_android.jni, jvm, function(jni)
+                local env = jni and jni.env
+                if env == nil or env[0] == nil then
+                    return false
+                end
+                return runWithEnv(env, ffi, fn)
+            end)
+            if ok_ctx then
+                return ok_fn, res_fn
+            end
+        elseif p_android.jni.env ~= nil and p_android.jni.env[0] ~= nil then
+            return runWithEnv(p_android.jni.env, ffi, fn)
+        end
     end
 
     local env_ptr
@@ -173,13 +200,9 @@ local function withJNIEnv(p_android, fn)
         return false
     end
 
-    local ok, res = pcall(fn, env, ffi)
-    clearJNIException(env)
+    local ok, res = runWithEnv(env, ffi, fn)
     if attached_here then
         jvm[0].DetachCurrentThread(jvm)
-    end
-    if not ok and logger and logger.warn then
-        logger.warn("[BooxRefreshManager] JNI error: " .. tostring(res))
     end
     return ok, res
 end
