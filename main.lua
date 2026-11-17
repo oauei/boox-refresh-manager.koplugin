@@ -67,7 +67,7 @@ local function buildRegalAppConfigJSON(reader_regal_mode)
     end
     local update_mode = (mode == "regal") and 3 or 5
     local str = string.format(
-        '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":false,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"%s","refreshModeIndex":"refresh_mode_1","supportRegal":true,"turbo":0,"updateMode":%d,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":false}',
+        '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":2,"enable":true,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"%s","refreshModeIndex":"refresh_mode_1","supportRegal":true,"turbo":0,"updateMode":%d,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":false,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":false}',
         mode,
         update_mode
     )
@@ -84,19 +84,7 @@ _REGAL_PLUS_CONFIG_JSON = buildRegalAppConfigJSON("regal_plus")
 local OPTIMAL_REGAL_APP_CONFIG_JSON = _REGAL_PLUS_CONFIG_JSON
 
 local function buildSmoothAppConfigJSON()
-    return '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":1,"enable":true,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"smooth","refreshModeIndex":"refresh_mode_5","supportRegal":false,"turbo":7,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":true}'
-end
-
-local SMOOTH_APP_CONFIG_JSON = buildSmoothAppConfigJSON()
-local scroll_oec_smooth_active = false
-local scroll_app_scope_dirty = false
-
-local function isContinuousScrollSession()
-    return active_scroll_view ~= nil and active_scroll_view.page_scroll == true
-end
-
-local function buildSmoothAppConfigJSON()
-    return '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":1,"enable":true,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"smooth","refreshModeIndex":"refresh_mode_5","supportRegal":false,"turbo":7,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":true,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":true}'
+    return '{"activityConfigMap":{},"autoFreezeConfig":{"autoFreeze":true,"enable":true,"supportAutoFreeze":true},"autoStartConfig":{"autoStart":false,"enable":true,"supportAdjust":true},"colorConfigMap":{},"colorMode":"vivid","cssConfigMap":{},"dpiConfig":{"dpi":0,"enable":true},"enable":true,"extraConfig":{"allowSplashScreen":true,"enable":true,"forceFullScreen":false,"fullPMAccess":false,"fullPMAccessTimeout":300000,"useDialogBorder":false,"usePageKeyAsVolumeKey":true},"forceScrollRefreshClsList":["com.qmuiteam.qmui.arch.SwipeBackLayout","mozilla.components.browser.engine.gecko.GeckoEngineView$geckoView$1","com.dragon.reader.simple.slip.OverScrollView","com.dragon.read.reader.ui.ReaderOverScrollView"],"globalActivityConfig":{"clsName":"","disableScrollAnim":false,"displayConfig":{"bwMode":0,"cfaColorBrightness":0,"cfaColorSaturation":0,"cfaColorSaturationMin":60,"contrast":30,"ditherThreshold":128,"enable":true,"enhance":true,"monoLevel":0},"eacScrollStyle":1,"enable":true,"noteConfig":{"compatibleVersionCode":0,"enable":false,"globalStrokeStyle":{"enable":false,"strokeColor":-16777216,"strokeExtraArgs":[],"strokeParams":[],"strokeStyle":0,"strokeWidth":3},"repaintLatency":500,"styleMap":{},"supportNoteConfig":false},"paintConfig":{"antiAlisingType":0,"ditherBitmap":false,"enable":true,"fillBrightness":0,"fillContrast":0,"fillEAC":false,"iconBrightness":0,"iconContrast":0,"iconEAC":false,"iconThreshold":0,"imgEAC":false,"imgGamma":60,"quantBits":3,"textBold":false,"textEACType":0},"refreshConfig":{"animationDuration":0,"antiFlicker":0,"enable":true,"gcInterval":20,"refreshModeAlias":"smooth","refreshModeIndex":"refresh_mode_5","supportRegal":false,"turbo":7,"updateMode":2,"useGCForNewSurface":false},"scrollRefreshDelay":1000},"globalCSSConfig":{"clsName":"","customCSS":"","enable":true,"fontBold":false,"fontColor":0,"fontSize":100},"keyboardConfig":{"enable":true,"pageKeyMode":1},"networkConfig":{"enable":true,"overrideRules":0},"pkgName":"org.koreader.launcher","rotationConfig":{"enable":false,"overrideRotation":-1},"scrollArgs":{"duration":600,"endXPercent":0.5,"endYPercent":0.8,"sampleTime":16,"startXPercent":0.5,"startYPercent":0.2},"scrollViewWhiteList":[],"supportEAC":true}'
 end
 
 local SMOOTH_APP_CONFIG_JSON = buildSmoothAppConfigJSON()
@@ -375,6 +363,8 @@ local function armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls, reader_reg
     callStaticVUHMethod(env, vuh_cls, "enableRegal", "(Z)V", ffi_mod.cast("jboolean", 1))
     local transient_epd_mode = (mode == "regal") and 6 or 9
     callStaticVUHMethod(env, vuh_cls, "setDebouncerTransientUpdateMode", "(I)V", ffi_mod.cast("jint", transient_epd_mode))
+    callStaticVUHMethod(env, vuh_cls, "setTurbo", "(I)V", ffi_mod.cast("jint", 0))
+    callStaticVUHMethod(env, vuh_cls, "turbo", "(I)V", ffi_mod.cast("jint", 0))
 end
 
 local function withViewUpdateHelper(p_android, callback)
@@ -484,6 +474,17 @@ function BooxRefreshManager:applyOECAppConfig(p_android, json_str, save_mmkv)
     return success
 end
 
+local function restoreRegalOECIfNeeded(p_android, save_mmkv)
+    if not scroll_oec_smooth_active then
+        return
+    end
+    scroll_oec_smooth_active = false
+    local active_android = p_android or getAndroidModule()
+    if active_android then
+        BooxRefreshManager:applyOECAppConfig(active_android, buildRegalAppConfigJSON(getReaderRegalMode()), save_mmkv == true)
+    end
+end
+
 function BooxRefreshManager:applyOptimalSettings()
     -- 1. Ensure KOReader avoid_flashing_ui, classic 1:1 scroll_method, and plugin enable flag are active
     if G_reader_settings and G_reader_settings.saveSetting then
@@ -572,6 +573,7 @@ function BooxRefreshManager:installScreenHooks(p_android)
             and not isContinuousScrollSession()
         then
             local active_android = p_android or getAndroidModule()
+            restoreRegalOECIfNeeded(active_android, false)
             local mode = getReaderRegalMode()
             withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
                 armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls, mode)
@@ -743,6 +745,7 @@ function BooxRefreshManager:installScreenHooks(p_android)
                 return Screen.refreshUIImp(self_scr, x, y, w, h)
             end
             local active_android = p_android or getAndroidModule()
+            restoreRegalOECIfNeeded(active_android, false)
             local mode = getReaderRegalMode()
             withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
                 armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls, mode)
@@ -763,6 +766,21 @@ function BooxRefreshManager:installScreenHooks(p_android)
                     rescheduleScrollSettle(0.15)
                 end
                 return Screen.refreshUIImp(self_scr, x, y, w, h)
+            end
+            if WaveformClamper.enabled
+                and WaveformClamper.isReaderDocumentView()
+                and not isContinuousScrollSession()
+            then
+                local active_android = p_android or getAndroidModule()
+                restoreRegalOECIfNeeded(active_android, false)
+                local mode = getReaderRegalMode()
+                withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
+                    armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls, mode)
+                    logger.info(string.format("[BooxRefreshManager] refreshFastImp armed SurfaceFlinger Regal (%s) for Reader: scheme(1), antiFlicker(0), byPass(0), clearAppScopeUpdate(0..2), enableRegal(true), enableDither(true), debouncer(%s)",
+                        mode, tostring(mode ~= "regal")))
+                end)
+                scroll_sf_disarmed = false
+                scroll_app_scope_dirty = true
             end
             return orig_fast_imp(self_scr, x, y, w, h)
         end
@@ -822,6 +840,18 @@ function BooxRefreshManager:init()
     local p_android = getAndroidModule()
     if enabled then
         self:applyOptimalSettings()
+        if G_reader_settings and G_reader_settings.saveSetting then
+            G_reader_settings:saveSetting("boox_refresh_manager_oec_migrated_v2", true)
+        end
+    elseif p_android and G_reader_settings and G_reader_settings.readSetting
+        and not G_reader_settings:readSetting("boox_refresh_manager_oec_migrated_v2")
+    then
+        -- Repair previously overwritten OEC MMKV config (rotationConfig.enable=false, globalActivityConfig.enable=true)
+        -- even when the plugin's runtime clamping is disabled.
+        if self:applyOECAppConfig(p_android, buildRegalAppConfigJSON(getReaderRegalMode()), true) then
+            G_reader_settings:saveSetting("boox_refresh_manager_oec_migrated_v2", true)
+            pcall(function() G_reader_settings:flush() end)
+        end
     end
 
     -- Install hardware ARect + SurfaceFlinger Regal suppression Screen hooks
@@ -914,7 +944,7 @@ clearContinuousScrollState = function()
     end
     WaveformClamper.scroll_pan_active = false
     scroll_sf_disarmed = false
-    scroll_oec_smooth_active = false
+    restoreRegalOECIfNeeded(nil, false)
     scroll_app_scope_dirty = false
     active_scroll_view = nil
     active_scroll_rp = nil
@@ -1250,6 +1280,27 @@ function BooxRefreshManager:installScrollPanHooks()
     end
 end
 
+function BooxRefreshManager:onReaderReady()
+    if not WaveformClamper.enabled then
+        return
+    end
+    local view = self.ui and self.ui.view
+    if view and view.page_scroll then
+        return
+    end
+    clearContinuousScrollState()
+    local active_android = getAndroidModule()
+    if active_android then
+        local mode = getReaderRegalMode()
+        withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
+            armSurfaceFlingerRegalForReader(env, ffi_mod, vuh_cls, mode)
+            logger.info(string.format("[BooxRefreshManager] onReaderReady armed SurfaceFlinger Regal (%s) for non-scrolly book", mode))
+        end)
+        scroll_sf_disarmed = false
+        scroll_app_scope_dirty = true
+    end
+end
+
 function BooxRefreshManager:onSuspend()
     cancelScrollTimers()
     cancelDitherOverrideTimer()
@@ -1257,7 +1308,7 @@ function BooxRefreshManager:onSuspend()
     active_scroll_rp = nil
     WaveformClamper.scroll_pan_active = false
     scroll_sf_disarmed = false
-    scroll_oec_smooth_active = false
+    restoreRegalOECIfNeeded(nil, false)
     scroll_app_scope_dirty = false
     scroll_releasing = false
     active_scroll_view = nil
@@ -1272,7 +1323,7 @@ function BooxRefreshManager:onPause()
     active_scroll_rp = nil
     WaveformClamper.scroll_pan_active = false
     scroll_sf_disarmed = false
-    scroll_oec_smooth_active = false
+    restoreRegalOECIfNeeded(nil, false)
     scroll_app_scope_dirty = false
     scroll_releasing = false
     active_scroll_view = nil
