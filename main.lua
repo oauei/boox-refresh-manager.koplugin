@@ -32,6 +32,8 @@ local orig_full_imp = nil
 local orig_reader_paging_onPan = nil
 local orig_reader_paging_onPanRelease = nil
 local orig_reader_paging_onSwipe = nil
+local orig_reader_saveSetting = nil
+local orig_docsettings_flush = nil
 local scroll_settle_cb = nil
 local scroll_fallback_cb = nil
 local active_scroll_view = nil
@@ -860,6 +862,9 @@ function BooxRefreshManager:init()
     -- Install continuous scroll pan/release hooks for smooth scroll -> Regal settle
     self:installScrollPanHooks()
 
+    -- Prevent KOReader core from persisting closed_rotation_mode / copt_rotation_mode / kopt_rotation_mode
+    self:installRotationPersistenceGuard()
+
     logger.info(string.format("[BooxRefreshManager] Initialized (enabled: %s, coalesce window: %dms, android: %s)",
         tostring(enabled), math.floor(RefreshCoalescer.coalesce_window_s * 1000), tostring(p_android ~= nil)))
 end
@@ -1280,7 +1285,50 @@ function BooxRefreshManager:installScrollPanHooks()
     end
 end
 
+function BooxRefreshManager:installRotationPersistenceGuard()
+    -- 1. Strip and block closed_rotation_mode in G_reader_settings (settings.reader.lua)
+    if G_reader_settings then
+        if G_reader_settings.delSetting then
+            pcall(function() G_reader_settings:delSetting("closed_rotation_mode") end)
+        end
+        if G_reader_settings.saveSetting and not orig_reader_saveSetting then
+            orig_reader_saveSetting = G_reader_settings.saveSetting
+            G_reader_settings.saveSetting = function(self_gs, key, value, ...)
+                if key == "closed_rotation_mode" then
+                    return self_gs
+                end
+                return orig_reader_saveSetting(self_gs, key, value, ...)
+            end
+        end
+    end
+
+    -- 2. Strip copt_rotation_mode / kopt_rotation_mode before DocSettings.flush writes .sdr metadata
+    local ok_ds, DocSettings = pcall(require, "docsettings")
+    if ok_ds and DocSettings and DocSettings.flush and not orig_docsettings_flush then
+        orig_docsettings_flush = DocSettings.flush
+        DocSettings.flush = function(self_ds, data, no_custom_metadata, ...)
+            local tbl = data or (self_ds and self_ds.data)
+            if type(tbl) == "table" then
+                tbl.copt_rotation_mode = nil
+                tbl.kopt_rotation_mode = nil
+            end
+            if self_ds and type(self_ds.data) == "table" then
+                self_ds.data.copt_rotation_mode = nil
+                self_ds.data.kopt_rotation_mode = nil
+            end
+            return orig_docsettings_flush(self_ds, data, no_custom_metadata, ...)
+        end
+    end
+end
+
 function BooxRefreshManager:onReaderReady()
+    local doc_settings = self.ui and self.ui.doc_settings
+    if doc_settings and doc_settings.delSetting then
+        pcall(function()
+            doc_settings:delSetting("copt_rotation_mode")
+            doc_settings:delSetting("kopt_rotation_mode")
+        end)
+    end
     if not WaveformClamper.enabled then
         return
     end
@@ -1381,6 +1429,17 @@ function BooxRefreshManager:onDestroy()
     if orig_full_imp and Screen then
         Screen.refreshFullImp = orig_full_imp
         orig_full_imp = nil
+    end
+    if orig_reader_saveSetting and G_reader_settings then
+        G_reader_settings.saveSetting = orig_reader_saveSetting
+        orig_reader_saveSetting = nil
+    end
+    if orig_docsettings_flush then
+        local ok_ds, DocSettings = pcall(require, "docsettings")
+        if ok_ds and DocSettings then
+            DocSettings.flush = orig_docsettings_flush
+        end
+        orig_docsettings_flush = nil
     end
 end
 
