@@ -389,14 +389,92 @@ function BooxRefreshManager:applyHardwareDisplayScheme(p_android)
     return true
 end
 
+local function readExistingOECRotationConfig(env, ffi, helper_cls)
+    if not (env and ffi and helper_cls and env[0].CallStaticObjectMethod and env[0].CallObjectMethod and env[0].GetStringUTFChars) then
+        return nil
+    end
+    local mid_get = env[0].GetStaticMethodID(
+        env,
+        helper_cls,
+        "getAppConfigFromService",
+        "(Ljava/lang/String;)Landroid/onyx/optimization/data/v2/EACAppConfig;"
+    )
+    if mid_get == nil then
+        clearJNIException(env)
+        return nil
+    end
+    local jstr_pkg = env[0].NewStringUTF(env, "org.koreader.launcher")
+    if jstr_pkg == nil then
+        clearJNIException(env)
+        return nil
+    end
+    local cfg_obj = env[0].CallStaticObjectMethod(env, helper_cls, mid_get, jstr_pkg)
+    env[0].DeleteLocalRef(env, jstr_pkg)
+    if clearJNIException(env) or cfg_obj == nil then
+        if cfg_obj ~= nil then env[0].DeleteLocalRef(env, cfg_obj) end
+        return nil
+    end
+
+    local rot_block = nil
+    local cfg_cls = (env[0].GetObjectClass and env[0].GetObjectClass(env, cfg_obj))
+        or env[0].FindClass(env, "android/onyx/optimization/data/v2/EACAppConfig")
+    if cfg_cls ~= nil then
+        local mid_to_json = env[0].GetMethodID(env, cfg_cls, "toJsonString", "()Ljava/lang/String;")
+        if mid_to_json ~= nil then
+            local jjson = env[0].CallObjectMethod(env, cfg_obj, mid_to_json)
+            if not clearJNIException(env) and jjson ~= nil then
+                local cstr = env[0].GetStringUTFChars(env, jjson, nil)
+                if cstr ~= nil then
+                    local ok_s, lua_str = pcall(ffi.string, cstr)
+                    if env[0].ReleaseStringUTFChars then
+                        env[0].ReleaseStringUTFChars(env, jjson, cstr)
+                    end
+                    if ok_s and type(lua_str) == "string" then
+                        rot_block = lua_str:match('"rotationConfig"%s*:%s*(%b{})')
+                    end
+                else
+                    clearJNIException(env)
+                end
+                env[0].DeleteLocalRef(env, jjson)
+            else
+                if jjson ~= nil then env[0].DeleteLocalRef(env, jjson) end
+            end
+        else
+            clearJNIException(env)
+        end
+        env[0].DeleteLocalRef(env, cfg_cls)
+    else
+        clearJNIException(env)
+    end
+
+    env[0].DeleteLocalRef(env, cfg_obj)
+    return rot_block
+end
+
 function BooxRefreshManager:applyOECAppConfig(p_android, json_str, save_mmkv)
     json_str = json_str or buildRegalAppConfigJSON(getReaderRegalMode())
     local save_flag = (save_mmkv == false) and 0 or 1
     local success = false
     withJNIEnv(p_android, function(env, ffi)
+        local helper_cls = env[0].FindClass(env, "android/onyx/optimization/EInkHelper")
+        if helper_cls == nil then
+            logger.warn("[BooxRefreshManager] EInkHelper class not found")
+            clearJNIException(env)
+            return
+        end
+
+        local existing_rot = readExistingOECRotationConfig(env, ffi, helper_cls)
+        if existing_rot then
+            json_str = json_str:gsub('"rotationConfig"%s*:%s*%b{}', function()
+                return '"rotationConfig":' .. existing_rot
+            end, 1)
+            logger.info("[BooxRefreshManager] Preserving existing OEC rotationConfig: " .. existing_rot)
+        end
+
         local list_cls = env[0].FindClass(env, "java/util/ArrayList")
         if list_cls == nil then
             clearJNIException(env)
+            env[0].DeleteLocalRef(env, helper_cls)
             return
         end
 
@@ -407,6 +485,7 @@ function BooxRefreshManager:applyOECAppConfig(p_android, json_str, save_mmkv)
             clearJNIException(env)
             if list_obj ~= nil then env[0].DeleteLocalRef(env, list_obj) end
             env[0].DeleteLocalRef(env, list_cls)
+            env[0].DeleteLocalRef(env, helper_cls)
             return
         end
 
@@ -444,22 +523,15 @@ function BooxRefreshManager:applyOECAppConfig(p_android, json_str, save_mmkv)
         end
 
         if bundle_obj ~= nil then
-            local helper_cls = env[0].FindClass(env, "android/onyx/optimization/EInkHelper")
-            if helper_cls ~= nil then
-                local mid = env[0].GetStaticMethodID(env, helper_cls, "applyAppConfigToService", "(Ljava/util/List;Landroid/os/Bundle;)V")
-                if mid ~= nil then
-                    env[0].CallStaticVoidMethod(env, helper_cls, mid, list_obj, bundle_obj)
-                    if not clearJNIException(env) then
-                        logger.info("[BooxRefreshManager] Successfully called EInkHelper.applyAppConfigToService")
-                        success = true
-                    end
-                else
-                    logger.warn("[BooxRefreshManager] applyAppConfigToService methodID not found")
-                    clearJNIException(env)
+            local mid = env[0].GetStaticMethodID(env, helper_cls, "applyAppConfigToService", "(Ljava/util/List;Landroid/os/Bundle;)V")
+            if mid ~= nil then
+                env[0].CallStaticVoidMethod(env, helper_cls, mid, list_obj, bundle_obj)
+                if not clearJNIException(env) then
+                    logger.info("[BooxRefreshManager] Successfully called EInkHelper.applyAppConfigToService")
+                    success = true
                 end
-                env[0].DeleteLocalRef(env, helper_cls)
             else
-                logger.warn("[BooxRefreshManager] EInkHelper class not found")
+                logger.warn("[BooxRefreshManager] applyAppConfigToService methodID not found")
                 clearJNIException(env)
             end
         else
@@ -472,6 +544,7 @@ function BooxRefreshManager:applyOECAppConfig(p_android, json_str, save_mmkv)
 
         env[0].DeleteLocalRef(env, list_obj)
         env[0].DeleteLocalRef(env, list_cls)
+        env[0].DeleteLocalRef(env, helper_cls)
     end)
     return success
 end
