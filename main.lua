@@ -34,6 +34,8 @@ local orig_reader_paging_onPanRelease = nil
 local orig_reader_paging_onSwipe = nil
 local orig_reader_saveSetting = nil
 local orig_docsettings_flush = nil
+local orig_android_setScreenOrientation = nil
+local SCREEN_ORIENTATION_FULL_USER = 13
 local scroll_settle_cb = nil
 local scroll_fallback_cb = nil
 local active_scroll_view = nil
@@ -1358,7 +1360,58 @@ function BooxRefreshManager:installScrollPanHooks()
     end
 end
 
+local function enforceSystemAutorotation(p_android)
+    if not p_android then return end
+    local wrapped = false
+    if type(p_android.setScreenOrientation) == "function" then
+        if not p_android._brm_full_user_patched then
+            p_android._brm_full_user_patched = true
+            orig_android_setScreenOrientation = p_android.setScreenOrientation
+            p_android.setScreenOrientation = function(_orientation)
+                return orig_android_setScreenOrientation(SCREEN_ORIENTATION_FULL_USER)
+            end
+        end
+        pcall(p_android.setScreenOrientation, SCREEN_ORIENTATION_FULL_USER)
+        wrapped = true
+    end
+    if type(p_android.screen) == "table" and type(p_android.screen.setOrientation) == "function" then
+        if not p_android.screen._brm_full_user_patched then
+            p_android.screen._brm_full_user_patched = true
+            local orig_sc = p_android.screen.setOrientation
+            p_android.screen._brm_orig_setOrientation = orig_sc
+            p_android.screen.setOrientation = function(_orientation)
+                return orig_sc(SCREEN_ORIENTATION_FULL_USER)
+            end
+        end
+        pcall(p_android.screen.setOrientation, SCREEN_ORIENTATION_FULL_USER)
+        wrapped = true
+    end
+    -- Direct JNI Activity.setRequestedOrientation(SCREEN_ORIENTATION_FULL_USER) on ANativeActivity.clazz
+    if not wrapped and p_android.app and p_android.app.activity and p_android.app.activity.clazz ~= nil then
+        withJNIEnv(p_android, function(env, ffi)
+            local clazz = p_android.app.activity.clazz
+            local act_cls = (env[0].GetObjectClass and env[0].GetObjectClass(env, clazz))
+                or env[0].FindClass(env, "android/app/Activity")
+            if act_cls ~= nil then
+                local mid = env[0].GetMethodID(env, act_cls, "setRequestedOrientation", "(I)V")
+                if mid ~= nil then
+                    env[0].CallVoidMethod(env, clazz, mid, ffi.cast("jint", SCREEN_ORIENTATION_FULL_USER))
+                    clearJNIException(env)
+                else
+                    clearJNIException(env)
+                end
+                env[0].DeleteLocalRef(env, act_cls)
+            else
+                clearJNIException(env)
+            end
+        end)
+    end
+end
+
 function BooxRefreshManager:installRotationPersistenceGuard()
+    -- 0. Keep Android MainActivity in SCREEN_ORIENTATION_FULL_USER (13)
+    enforceSystemAutorotation(getAndroidModule())
+
     -- 1. Strip and block closed_rotation_mode in G_reader_settings (settings.reader.lua)
     if G_reader_settings then
         if G_reader_settings.delSetting then
@@ -1513,6 +1566,14 @@ function BooxRefreshManager:onDestroy()
             DocSettings.flush = orig_docsettings_flush
         end
         orig_docsettings_flush = nil
+    end
+    if orig_android_setScreenOrientation then
+        local p_android = getAndroidModule()
+        if p_android then
+            p_android.setScreenOrientation = orig_android_setScreenOrientation
+            p_android._brm_full_user_patched = nil
+        end
+        orig_android_setScreenOrientation = nil
     end
 end
 
