@@ -8,6 +8,7 @@ if not (ok_a and android) then
     return
 end
 
+android._brm_rotation_patch_loaded = true
 local SCREEN_ORIENTATION_FULL_USER = 13
 
 if type(android.setScreenOrientation) == "function" and not android._brm_full_user_patched then
