@@ -35,10 +35,14 @@ local function _static_flush_cb()
     RefreshCoalescer.flush()
 end
 
+local function isFiniteNumber(v)
+    return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
+end
+
 function RefreshCoalescer.queueRefresh(x, y, w, h, d)
     if not Screen then return end
 
-    if not x or not y or not w or not h then
+    if not isFiniteNumber(x) or not isFiniteNumber(y) or not isFiniteNumber(w) or not isFiniteNumber(h) then
         local sw = Screen.getWidth and Screen:getWidth() or 2480
         local sh = Screen.getHeight and Screen:getHeight() or 1860
         x, y, w, h = 0, 0, sw, sh
@@ -61,12 +65,18 @@ function RefreshCoalescer.queueRefresh(x, y, w, h, d)
         mr.y = min_y
         mr.w = max_x - min_x
         mr.h = max_y - min_y
-        mr.d = d or mr.d
+        if d ~= nil then
+            mr.d = d
+        end
     end
 
-    if not RefreshCoalescer.flush_callback and UIManager and UIManager.scheduleIn then
-        RefreshCoalescer.flush_callback = _static_flush_cb
-        UIManager:scheduleIn(RefreshCoalescer.coalesce_window_s, RefreshCoalescer.flush_callback)
+    if not RefreshCoalescer.flush_callback then
+        if UIManager and UIManager.scheduleIn then
+            RefreshCoalescer.flush_callback = _static_flush_cb
+            UIManager:scheduleIn(RefreshCoalescer.coalesce_window_s, RefreshCoalescer.flush_callback)
+        else
+            RefreshCoalescer.flush()
+        end
     end
 end
 
@@ -206,7 +216,7 @@ function RefreshCoalescer.installHooks()
             end
 
             if Screen.refreshPartial then
-                return Screen:refreshPartial(x, y, w, h, d)
+                return Screen.refreshPartial(self_scr, x, y, w, h, d)
             else
                 return Screen.refreshUI(self_scr, x, y, w, h, d)
             end
@@ -253,7 +263,7 @@ end
 function RefreshCoalescer.removeHooks()
     if not RefreshCoalescer.hooked or not Screen then return end
 
-    RefreshCoalescer.flush()
+    pcall(RefreshCoalescer.flush)
 
     if RefreshCoalescer.orig_refreshUI then
         Screen.refreshUI = RefreshCoalescer.orig_refreshUI

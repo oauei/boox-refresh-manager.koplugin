@@ -82,11 +82,6 @@ function WaveformClamper.clampMode(widget, mode)
     end
 
     if WaveformClamper.isReaderDocumentView() then
-        if WaveformClamper.scroll_pan_active then
-            if mode == "fast" or mode == "partial" or mode == "flashpartial" or mode == "full" or mode == "flashui" then
-                return "ui"
-            end
-        end
         return mode
     end
 

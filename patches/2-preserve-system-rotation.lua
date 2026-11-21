@@ -33,7 +33,7 @@ then
 end
 
 -- Also set Activity.setRequestedOrientation(SCREEN_ORIENTATION_FULL_USER) directly via JNI
-if android.app and android.app.activity and android.app.activity.vm and android.app.activity.clazz
+if android.app ~= nil and android.app.activity ~= nil and android.app.activity.vm ~= nil and android.app.activity.clazz ~= nil
     and android.jni and type(android.jni.context) == "function"
 then
     local ok_ffi, ffi = pcall(require, "ffi")
@@ -42,6 +42,7 @@ then
             local env = jni and jni.env
             if env == nil or env[0] == nil then return end
             local clazz = android.app.activity.clazz
+            if clazz == nil then return end
             local act_cls = (env[0].GetObjectClass and env[0].GetObjectClass(env, clazz))
                 or env[0].FindClass(env, "android/app/Activity")
             if act_cls ~= nil then
@@ -53,6 +54,8 @@ then
                     env[0].ExceptionClear(env)
                 end
                 env[0].DeleteLocalRef(env, act_cls)
+            elseif env[0].ExceptionCheck and env[0].ExceptionCheck(env) ~= 0 then
+                env[0].ExceptionClear(env)
             end
         end)
     end

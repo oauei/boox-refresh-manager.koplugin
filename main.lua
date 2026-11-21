@@ -45,6 +45,7 @@ local scroll_releasing = false
 local rescheduleScrollSettle = nil
 local clearContinuousScrollState = nil
 local cancelDitherOverrideTimer = nil
+local scroll_dither_override_cb = nil
 
 local JNI_OK = 0
 local JNI_VERSION_1_6 = 0x00010006
@@ -375,8 +376,11 @@ local function withViewUpdateHelper(p_android, callback)
     withJNIEnv(p_android, function(env, ffi_mod)
         local vuh_cls = env[0].FindClass(env, "android/onyx/ViewUpdateHelper")
         if vuh_cls ~= nil then
-            callback(env, ffi_mod, vuh_cls)
+            local ok_cb, cb_err = pcall(callback, env, ffi_mod, vuh_cls)
             env[0].DeleteLocalRef(env, vuh_cls)
+            if not ok_cb then
+                logger.warn("[BooxRefreshManager] withViewUpdateHelper callback error: " .. tostring(cb_err))
+            end
         else
             clearJNIException(env)
         end
@@ -481,8 +485,10 @@ function BooxRefreshManager:applyOECAppConfig(p_android, json_str, save_mmkv)
         end
 
         local list_init = env[0].GetMethodID(env, list_cls, "<init>", "()V")
-        local list_add = env[0].GetMethodID(env, list_cls, "add", "(Ljava/lang/Object;)Z")
-        local list_obj = (list_init ~= nil) and env[0].NewObject(env, list_cls, list_init) or nil
+        if list_init == nil then clearJNIException(env) end
+        local list_add = (list_init ~= nil) and env[0].GetMethodID(env, list_cls, "add", "(Ljava/lang/Object;)Z") or nil
+        if list_add == nil then clearJNIException(env) end
+        local list_obj = (list_init ~= nil and list_add ~= nil) and env[0].NewObject(env, list_cls, list_init) or nil
         if list_obj == nil or list_add == nil then
             clearJNIException(env)
             if list_obj ~= nil then env[0].DeleteLocalRef(env, list_obj) end
@@ -504,9 +510,12 @@ function BooxRefreshManager:applyOECAppConfig(p_android, json_str, save_mmkv)
         local bundle_obj = nil
         if bundle_cls ~= nil then
             local bundle_init = env[0].GetMethodID(env, bundle_cls, "<init>", "()V")
-            local bundle_put_bool = env[0].GetMethodID(env, bundle_cls, "putBoolean", "(Ljava/lang/String;Z)V")
+            if bundle_init == nil then clearJNIException(env) end
+            local bundle_put_bool = (bundle_init ~= nil) and env[0].GetMethodID(env, bundle_cls, "putBoolean", "(Ljava/lang/String;Z)V") or nil
+            if bundle_put_bool == nil then clearJNIException(env) end
             if bundle_init ~= nil then
                 bundle_obj = env[0].NewObject(env, bundle_cls, bundle_init)
+                if bundle_obj == nil then clearJNIException(env) end
                 if bundle_obj ~= nil and bundle_put_bool ~= nil then
                     local save_key = env[0].NewStringUTF(env, "args_save_mmkv")
                     if save_key ~= nil then
@@ -590,7 +599,7 @@ local function isValidNativeWindow(ffi_mod, win)
         local ok_ptr, addr = pcall(function()
             return tonumber(ffi_mod.cast("uintptr_t", win))
         end)
-        if ok_ptr and (addr == nil or addr == 0) then
+        if not ok_ptr or addr == nil or addr == 0 then
             return false
         end
     end
@@ -711,82 +720,86 @@ function BooxRefreshManager:installScreenHooks(p_android)
                 end
 
                 if active_android.lib.ANativeWindow_lock(active_android.app.window, buffer, dirty_rect) == 0 then
-                    local ok_blit, blit_err = pcall(function()
-                        local BB = getBlitBuffer()
-                        if BB then
-                            local win_bb = nil
-                            if buffer[0].format == 1 or buffer[0].format == 2 then
-                                win_bb = BB.new(buffer[0].width, buffer[0].height, BB.TYPE_BBRGB32, buffer[0].bits, buffer[0].stride * 4, buffer[0].stride)
-                            elseif buffer[0].format == 4 then
-                                win_bb = BB.new(buffer[0].width, buffer[0].height, BB.TYPE_BBRGB16, buffer[0].bits, buffer[0].stride * 2, buffer[0].stride)
-                            end
-                            if win_bb then
-                                local ext_bb = self_scr.full_bb or self_scr.bb
-                                if ext_bb then
-                                    win_bb:setInverse(ext_bb:getInverse())
-                                    win_bb:setRotation(ext_bb:getRotation())
-                                    if win_bb:getInverse() == 1 and BB.getUseCBB and BB:getUseCBB() then
-                                        if win_bb:getType() == ext_bb:getType() then
-                                            win_bb:invertblitFrom(ext_bb)
+                    local ok_post, post_err = pcall(function()
+                        local ok_blit, blit_err = pcall(function()
+                            local BB = getBlitBuffer()
+                            if BB and (buffer[0].width or 0) > 0 and (buffer[0].height or 0) > 0 then
+                                local win_bb = nil
+                                if buffer[0].format == 1 or buffer[0].format == 2 then
+                                    win_bb = BB.new(buffer[0].width, buffer[0].height, BB.TYPE_BBRGB32, buffer[0].bits, buffer[0].stride * 4, buffer[0].stride)
+                                elseif buffer[0].format == 4 then
+                                    win_bb = BB.new(buffer[0].width, buffer[0].height, BB.TYPE_BBRGB16, buffer[0].bits, buffer[0].stride * 2, buffer[0].stride)
+                                end
+                                if win_bb then
+                                    local ext_bb = self_scr.full_bb or self_scr.bb
+                                    if ext_bb then
+                                        win_bb:setInverse(ext_bb:getInverse())
+                                        win_bb:setRotation(ext_bb:getRotation())
+                                        if win_bb:getInverse() == 1 and BB.getUseCBB and BB:getUseCBB() then
+                                            if win_bb:getType() == ext_bb:getType() then
+                                                win_bb:invertblitFrom(ext_bb)
+                                            else
+                                                win_bb:blitFrom(ext_bb)
+                                                win_bb:invertRect(0, 0, win_bb:getWidth(), win_bb:getHeight())
+                                            end
                                         else
                                             win_bb:blitFrom(ext_bb)
-                                            win_bb:invertRect(0, 0, win_bb:getWidth(), win_bb:getHeight())
                                         end
-                                    else
-                                        win_bb:blitFrom(ext_bb)
                                     end
                                 end
+                            end
+                        end)
+                        if not ok_blit then
+                            logger.warn("[BooxRefreshManager] Blit operation failed: " .. tostring(blit_err))
+                        end
+
+                        -- Disarm SurfaceFlinger debouncer/Regal once per scroll pan (skip redundant per-frame JNI calls)
+                        if WaveformClamper.scroll_pan_active and scroll_releasing and rescheduleScrollSettle then
+                            rescheduleScrollSettle(0.15)
+                        end
+                        if not (WaveformClamper.scroll_pan_active and scroll_sf_disarmed) then
+                            local keep_smooth = in_reader_doc and isContinuousScrollSession()
+                            if keep_smooth and (scroll_app_scope_dirty or not scroll_oec_smooth_active) then
+                                BooxRefreshManager:applyOECAppConfig(active_android, SMOOTH_APP_CONFIG_JSON, false)
+                                scroll_oec_smooth_active = true
+                                scroll_app_scope_dirty = false
+                                if UIManager and UIManager.scheduleIn then
+                                    local epd_mode = WaveformClamper.scroll_epd_mode or 2
+                                    cancelDitherOverrideTimer()
+                                    scroll_dither_override_cb = function()
+                                        scroll_dither_override_cb = nil
+                                        if WaveformClamper.scroll_pan_active or isContinuousScrollSession() then
+                                            local a_mod = getAndroidModule()
+                                            if a_mod then
+                                                withViewUpdateHelper(a_mod, function(env, ffi_mod, vuh_cls)
+                                                    disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls, epd_mode, 0, false, 7, true)
+                                                end)
+                                            end
+                                        end
+                                    end
+                                    UIManager:scheduleIn(0.05, scroll_dither_override_cb)
+                                end
+                            end
+                            withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
+                                if keep_smooth then
+                                    local epd_mode = WaveformClamper.scroll_epd_mode or 2
+                                    disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls, epd_mode, 0, false, 7, true)
+                                    logger.info(string.format("[BooxRefreshManager] Disarmed SurfaceFlinger Regal (Smooth epd=%d): antiFlicker(0), dither(false), turbo(7)", epd_mode))
+                                else
+                                    disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls)
+                                    logger.info("[BooxRefreshManager] Disarmed SurfaceFlinger Regal: byPass(0), debouncer(false), enableRegal(false), enableDither(false), applyAppScopeUpdate")
+                                end
+                            end)
+                            if keep_smooth then
+                                scroll_sf_disarmed = true
+                            else
+                                scroll_app_scope_dirty = true
                             end
                         end
                     end)
-
-                    -- Disarm SurfaceFlinger debouncer/Regal once per scroll pan (skip redundant per-frame JNI calls)
-                    if WaveformClamper.scroll_pan_active and scroll_releasing and rescheduleScrollSettle then
-                        rescheduleScrollSettle(0.15)
-                    end
-                    if not (WaveformClamper.scroll_pan_active and scroll_sf_disarmed) then
-                        local keep_smooth = in_reader_doc and isContinuousScrollSession()
-                        if keep_smooth and (scroll_app_scope_dirty or not scroll_oec_smooth_active) then
-                            BooxRefreshManager:applyOECAppConfig(active_android, SMOOTH_APP_CONFIG_JSON, false)
-                            scroll_oec_smooth_active = true
-                            scroll_app_scope_dirty = false
-                            if UIManager and UIManager.scheduleIn then
-                                local epd_mode = WaveformClamper.scroll_epd_mode or 2
-                                cancelDitherOverrideTimer()
-                                scroll_dither_override_cb = function()
-                                    scroll_dither_override_cb = nil
-                                    if WaveformClamper.scroll_pan_active or isContinuousScrollSession() then
-                                        local a_mod = getAndroidModule()
-                                        if a_mod then
-                                            withViewUpdateHelper(a_mod, function(env, ffi_mod, vuh_cls)
-                                                disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls, epd_mode, 0, false, 7, true)
-                                            end)
-                                        end
-                                    end
-                                end
-                                UIManager:scheduleIn(0.05, scroll_dither_override_cb)
-                            end
-                        end
-                        withViewUpdateHelper(active_android, function(env, ffi_mod, vuh_cls)
-                            if keep_smooth then
-                                local epd_mode = WaveformClamper.scroll_epd_mode or 2
-                                disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls, epd_mode, 0, false, 7, true)
-                                logger.info(string.format("[BooxRefreshManager] Disarmed SurfaceFlinger Regal (Smooth epd=%d): antiFlicker(0), dither(false), turbo(7)", epd_mode))
-                            else
-                                disarmSurfaceFlingerRegal(env, ffi_mod, vuh_cls)
-                                logger.info("[BooxRefreshManager] Disarmed SurfaceFlinger Regal: byPass(0), debouncer(false), enableRegal(false), enableDither(false), applyAppScopeUpdate")
-                            end
-                        end)
-                        if keep_smooth then
-                            scroll_sf_disarmed = true
-                        else
-                            scroll_app_scope_dirty = true
-                        end
-                    end
-
                     active_android.lib.ANativeWindow_unlockAndPost(active_android.app.window)
-                    if not ok_blit then
-                        logger.warn("[BooxRefreshManager] Blit operation failed: " .. tostring(blit_err))
+                    if not ok_post then
+                        logger.warn("[BooxRefreshManager] Post-lock surface work failed: " .. tostring(post_err))
                     end
                     if not (WaveformClamper.scroll_pan_active and scroll_sf_disarmed) then
                         logger.info(string.format("[BooxRefreshManager] ANativeWindow_lock with ARect: %d,%d to %d,%d",
@@ -945,7 +958,6 @@ function BooxRefreshManager:init()
 end
 
 local scroll_inertia_cb = nil
-local scroll_dither_override_cb = nil
 
 local function getScrollTime()
     local TimeVal = package.loaded["ui/time"]
@@ -955,10 +967,13 @@ local function getScrollTime()
     end
     if TimeVal and TimeVal.now then
         local t = TimeVal:now()
-        if type(t) == "number" then
-            if TimeVal.to_s then
-                return TimeVal.to_s(t)
+        if TimeVal.to_s and (type(t) == "number" or type(t) == "cdata") then
+            local ok_s, s = pcall(TimeVal.to_s, t)
+            if ok_s and type(s) == "number" then
+                return s
             end
+        end
+        if type(t) == "number" then
             return t / 1000000
         elseif type(t) == "table" or type(t) == "cdata" then
             local ok_sec, sec = pcall(function() return t.sec end)
@@ -1001,17 +1016,14 @@ local function restoreReaderPagingPanRates(rp)
     rp._brm_last_origin = nil
     rp._brm_vel_y = nil
     rp._brm_last_pan_t = nil
-    if rp._brm_orig_pan_rate ~= nil then
+    if rp._brm_pan_rates_saved then
         rp.pan_rate = rp._brm_orig_pan_rate
-        rp._brm_orig_pan_rate = nil
-    end
-    if rp._brm_orig_pan_interval ~= nil then
         rp.pan_interval = rp._brm_orig_pan_interval
-        rp._brm_orig_pan_interval = nil
-    end
-    if rp._brm_orig_scroll_activation_delay ~= nil then
         rp.scroll_activation_delay = rp._brm_orig_scroll_activation_delay
+        rp._brm_orig_pan_rate = nil
+        rp._brm_orig_pan_interval = nil
         rp._brm_orig_scroll_activation_delay = nil
+        rp._brm_pan_rates_saved = nil
     end
 end
 
@@ -1045,7 +1057,7 @@ local function settleScrollToRegal()
     end
     WaveformClamper.scroll_pan_active = false
     scroll_sf_disarmed = false
-    scroll_oec_smooth_active = false
+    restoreRegalOECIfNeeded(nil, false)
     scroll_app_scope_dirty = false
     active_scroll_view = nil
 end
@@ -1225,7 +1237,8 @@ function BooxRefreshManager:installScrollPanHooks()
                 WaveformClamper.scroll_pan_active = true
                 active_scroll_view = rp.view
                 active_scroll_rp = rp
-                if rp._brm_orig_pan_rate == nil then
+                if not rp._brm_pan_rates_saved then
+                    rp._brm_pan_rates_saved = true
                     rp._brm_orig_pan_rate = rp.pan_rate
                     rp._brm_orig_pan_interval = rp.pan_interval
                     rp._brm_orig_scroll_activation_delay = rp.scroll_activation_delay
@@ -1567,14 +1580,21 @@ function BooxRefreshManager:onDestroy()
         end
         orig_docsettings_flush = nil
     end
-    if orig_android_setScreenOrientation then
-        local p_android = getAndroidModule()
-        if p_android then
-            p_android.setScreenOrientation = orig_android_setScreenOrientation
+    local p_android = getAndroidModule()
+    if p_android then
+        local restore_set = orig_android_setScreenOrientation or p_android._brm_orig_setScreenOrientation
+        if restore_set then
+            p_android.setScreenOrientation = restore_set
             p_android._brm_full_user_patched = nil
+            p_android._brm_orig_setScreenOrientation = nil
         end
-        orig_android_setScreenOrientation = nil
+        if type(p_android.screen) == "table" and p_android.screen._brm_orig_setOrientation then
+            p_android.screen.setOrientation = p_android.screen._brm_orig_setOrientation
+            p_android.screen._brm_full_user_patched = nil
+            p_android.screen._brm_orig_setOrientation = nil
+        end
     end
+    orig_android_setScreenOrientation = nil
 end
 
 function BooxRefreshManager:addToMainMenu(menu_items)
@@ -1601,6 +1621,9 @@ function BooxRefreshManager:addToMainMenu(menu_items)
                         end
                         if new_val and BooxRefreshManager.instance then
                             BooxRefreshManager.instance:applyOptimalSettings()
+                        elseif not new_val then
+                            clearContinuousScrollState()
+                            RefreshCoalescer.cancel()
                         end
                         if touchmenu_instance and touchmenu_instance.updateItems then
                             touchmenu_instance:updateItems()
